@@ -1,0 +1,5 @@
+gymnasium==1.0.0
+swig==4.2.1.post0
+torch==2.5.0
+mujoco==3.2.4
+matplotlib==3.9.2
