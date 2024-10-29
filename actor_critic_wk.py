@@ -114,7 +114,7 @@ def run_with_trained_model():
 
     test_model = ActorCritic(state_dim, action_dim)
 
-    test_model.load_state_dict(torch.load('a2cm.pt'))
+    test_model.load_state_dict(torch.load('a2cm.pt', weights_only=False))
     test_model.eval()  # Set the model to evaluation mode
 
     # Run test episodes
@@ -132,7 +132,7 @@ def run_with_trained_model():
             action = torch.argmax(action_probs).item()
 
             # Take the action in the environment
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _, _ = env.step(action)
             total_reward += reward
 
             # Update state
@@ -145,8 +145,7 @@ def run_with_trained_model():
 
     env.close()
 
-    
 
 if __name__ == '__main__':
-    run_training()
+    # run_training()
     run_with_trained_model()
