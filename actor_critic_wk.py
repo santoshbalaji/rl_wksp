@@ -47,6 +47,7 @@ def compute_advantage(rewards, values, gamma):
 
 def run_training():
     # Hyperparameters
+    training_counter = 0
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     learning_rate = 0.001
@@ -101,7 +102,10 @@ def run_training():
             print(f"Episode {episode}, Total Reward: {episode_reward}")
 
         # Early stopping if solved
-        if episode_reward >= 220:
+        if episode_reward >= 250 and training_counter < 10:
+            training_counter = training_counter + 1
+            print(f"trained: {training_counter}")
+        elif episode_reward >= 250 and training_counter >= 10:
             print(f"Solved in {episode} episodes!")
             break
 
