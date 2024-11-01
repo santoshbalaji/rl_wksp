@@ -152,4 +152,8 @@ def run_with_trained_model():
 
 if __name__ == '__main__':
     # run_training()
-    run_with_trained_model()
+    # run_with_trained_model()
+    state_dim = env.observation_space
+    action_dim = env.action_space
+    print(state_dim)
+    print(action_dim)
