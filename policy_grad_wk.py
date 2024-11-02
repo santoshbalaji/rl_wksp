@@ -1,45 +1,160 @@
-import gymnasium
+import gymnasium as gym
 import numpy as np
-import torch
-import torch.nn as nn
-import torch.optim as optim
+import pickle
 
-# Create the CartPole environment
-env = gymnasium.make("CartPole-v1", render_mode='human')
+# setting up cartpole environment
+env = gym.make("CartPole-v1")
 
-learning_rate = 0.01
-gamma = 0.99
-num_of_episodes = 1000
+# hyperparameters
+learning_rate = 0.01 # learning rate for policy updates
+gamma = 0.99          # discount factor
+num_episodes = 2000   # total number of episodes
+
+# discretize the state space into bins for each feature
+n_bins = [10, 10, 10, 10]  # number of bins for each state variable
+state_bins = [
+    np.linspace(-4.8, 4.8, n_bins[0] - 1),     # cart position
+    np.linspace(-4, 4, n_bins[1] - 1),         # cart velocity
+    np.linspace(-0.418, 0.418, n_bins[2] - 1), # pole angle
+    np.linspace(-4, 4, n_bins[3] - 1)          # pole angular velocity
+]
+
+# initialize policy table as a dictionary
+policy = dict()
 
 
-class PolicyNetwork(nn.Module):
-    def __init__(self):
-        super(PolicyNetwork, self).__init__()
-        self.fc1 = nn.Linear(env.observation_space.shape[0], 128)
-        self.fc2 = nn.Linear(128, env.action_space.n)
-    
+def discretize_state(state):
+    """
+      Discretize the continuous state into a tuple of bins.
+    """
+    state_discrete = tuple(int(np.digitize(s, bins)) for s, bins in zip(state, state_bins))
+    return state_discrete
 
-    def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        return torch.softmax(self.fc2(x), dim=1)
+
+def initialize_state(state):
+    """
+      Initialize policy entries for a new discrete state.
+    """
+    if state not in policy:
+        # initialize with equal probability for both actions (0: left, 1: right)
+        policy[state] = {0: 0.5, 1: 0.5}
 
 
 def select_action(state):
-    state = torch.from_numpy(state).float()
-    action_probs = policy_net(state)
-    action = np.random.choice(env.action_space.n, p=action_probs.detach().numpy())
-    return action, action_probs[action]
+    """
+      Select an action based on the policy probabilities.
+    """
+    action_probabilities = policy[state]
+    action = np.random.choice([0, 1], p=[action_probabilities[0], action_probabilities[1]])
+    return action
 
 
+def compute_returns(rewards, gamma):
+    """
+      Compute the cumulative discounted returns for each step in an episode.
+    """
+    returns = list()
+    G = 0
+    for reward in reversed(rewards):
+        G = reward + gamma * G
+        returns.insert(0, G)
+    return returns
 
-policy_net = PolicyNetwork()
-optimizer = optim.Adam(policy_net.parameters(), lr=learning_rate)
+
+def update_policy(episode_states, episode_actions, episode_returns):
+    """
+      Update the policy table using the policy gradient approach.
+    """
+    for state, action, G in zip(episode_states, episode_actions, episode_returns):
+        other_action = 1 - action  # The action we didn't take
+        # increase probability for actions that lead to high returns
+        policy[state][action] += learning_rate * G * (1 - policy[state][action])
+        # decrease probability for the other action
+        policy[state][other_action] -= learning_rate * G * policy[state][other_action]
+        # ensure probabilities remain valid
+        policy[state][action] = max(0, min(1, policy[state][action]))
+        policy[state][other_action] = 1 - policy[state][action]
 
 
+def run_training():
+    for episode in range(num_episodes):
+        state = discretize_state(env.reset()[0])
+        initialize_state(state)
+
+        episode_states = list()
+        episode_actions = list()
+        episode_rewards = list()
+
+        terminated = False
+        truncated = False
+        while not terminated and not truncated:
+            action = select_action(state)
+            next_state, reward, terminated, truncated, _ = env.step(action)
+            next_state = discretize_state(next_state)
+            initialize_state(next_state)
+
+            # store the state, action, and reward
+            episode_states.append(state)
+            episode_actions.append(action)
+            episode_rewards.append(reward)
+
+            state = next_state
+
+        # compute returns for the episode
+        episode_returns = compute_returns(episode_rewards, gamma)
+
+        # update policy based on the episode
+        update_policy(episode_states, episode_actions, episode_returns)
+
+        # logging for tracking progress
+        if episode % 100 == 0:
+            total_reward = sum(episode_rewards)
+            print(f"Episode {episode}, Total Reward: {total_reward}")
+
+    with open('policy_grad_wk.pickle', 'wb') as handle:
+        pickle.dump(policy, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
+def run_model():
+    global policy
+    with open('policy_grad_wk.pickle', 'rb') as handle:
+        policy = pickle.load(handle)
+
+    env = gym.make("CartPole-v1", render_mode='human')
+    # run test episodes with trained models
+    for episode in range(5):
+        state = env.reset()[0]
+        terminated = False
+        truncated = False
+        total_reward = 0
+
+        while not terminated and not truncated:
+            state = discretize_state(state)
+            action = select_action(state)
+
+            # take the action in the environment
+            next_state, reward, terminated, truncated, _  = env.step(action)
+            total_reward += reward
+
+            # update state
+            state = next_state
+
+            # render the environment
+            env.render()
+
+        print(f"Episode {episode + 1}, Total Reward: {total_reward}")
+
+    env.close()
+
+run_training()
+run_model()
+
+# available states
 # cart position (how far it is left or right from the center)
 # cart velocity (speed and direction of the cart)
 # pole angle (the angle of the pole relative to base)
 # pole angular velocity (how quickly is falling or returning upright)
-print(env.observation_space.shape[0])
+
+# available actions
+# left move 0 (move the agent to the left)
+# right move 1 (move the agent to the right)

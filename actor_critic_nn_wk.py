@@ -60,14 +60,15 @@ def run_training():
     # Training Loop
     for episode in range(1000):
         state = env.reset()
-        done = False
+        terminated = False
+        truncated = False
         rewards = []
         log_probs = []
         values = []
         episode_reward = 0
 
         state = state[0]
-        while not done:
+        while not terminated and not truncated:
             state = torch.FloatTensor(state)
             action_probs, value = model(state)
             
@@ -77,7 +78,7 @@ def run_training():
             log_prob = action_dist.log_prob(action)
             
             # Step environment
-            next_state, reward, done, _, _ = env.step(action.item())
+            next_state, reward, terminated, truncated, _ = env.step(action.item())
             rewards.append(reward)
             log_probs.append(log_prob)
             values.append(value)
@@ -124,11 +125,12 @@ def run_with_trained_model():
     # Run test episodes
     for episode in range(5):  # Run 5 test episodes
         state = env.reset()
-        done = False
+        terminated = False
+        truncated = False
         total_reward = 0
 
         state = state[0]
-        while not done:
+        while not terminated and not truncated:
             state = torch.FloatTensor(state)  # Convert state to tensor
             action_probs, _ = test_model(state)
 
@@ -136,13 +138,13 @@ def run_with_trained_model():
             action = torch.argmax(action_probs).item()
 
             # Take the action in the environment
-            next_state, reward, done, _, _ = env.step(action)
+            next_state, reward, terminated, truncated, _ = env.step(action)
             total_reward += reward
 
             # Update state
             state = next_state
 
-            # Render the environment (optional)
+            # Render the environment
             env.render()
 
         print(f"Episode {episode + 1}, Total Reward: {total_reward}")
