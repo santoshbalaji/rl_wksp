@@ -117,7 +117,7 @@ def run_training():
 
 def run_model():
     global policy
-    with open('policy_grad_wk.pickle', 'rb') as handle:
+    with open('policy_grad_wk_bk.pickle', 'rb') as handle:
         policy = pickle.load(handle)
 
     env = gym.make("CartPole-v1", render_mode='human')
@@ -146,7 +146,7 @@ def run_model():
 
     env.close()
 
-run_training()
+# run_training()
 run_model()
 
 # available states

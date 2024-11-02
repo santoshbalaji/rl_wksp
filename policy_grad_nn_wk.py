@@ -96,7 +96,7 @@ def run_training():
 def run_model():
     test_model = PolicyNetwork()
 
-    test_model.load_state_dict(torch.load('policy_grad_nn_wk.pth', weights_only=False))
+    test_model.load_state_dict(torch.load('policy_grad_nn_wk_bk.pth', weights_only=False))
     test_model.eval()
 
     # run test episodes with trained models
@@ -129,8 +129,8 @@ def run_model():
     env.close()
 
 
-check_cuda()
-run_training()
+# check_cuda()
+# run_training()
 run_model()
 
 # available states
