@@ -6,9 +6,10 @@ import pickle
 env = gym.make("CartPole-v1")
 
 # hyperparameters
-learning_rate = 0.01 # learning rate for policy updates
+learning_rate_actor = 0.01 # learning rate for the actor
+learning_rate_critic = 0.1 # learning rate for the critic
 gamma = 0.99          # discount factor
-num_episodes = 2000   # total number of episodes
+num_episodes = 3000   # total number of episodes
 
 # discretize the state space into bins for each feature
 n_bins = [10, 10, 10, 10]  # number of bins for each state variable
@@ -21,6 +22,7 @@ state_bins = [
 
 # initialize policy table as a dictionary
 policy = dict()
+value_function = dict()
 
 
 def discretize_state(state):
@@ -38,7 +40,7 @@ def initialize_state(state):
     if state not in policy:
         # initialize with equal probability for both actions (0: left, 1: right)
         policy[state] = {0: 0.5, 1: 0.5}
-
+        value_function[state] = 0.0   
 
 def select_action(state):
     """
@@ -61,19 +63,25 @@ def compute_returns(rewards, gamma):
     return returns
 
 
-def update_policy(episode_states, episode_actions, episode_returns):
+def update_policy(state, action, td_error):
     """
-      Update the policy table using the policy gradient approach.
+      Update the policy using the actor's policy gradient update
     """
-    for state, action, G in zip(episode_states, episode_actions, episode_returns):
-        other_action = 1 - action  # The action we didn't take
-        # increase probability for actions that lead to high returns
-        policy[state][action] += learning_rate * G * (1 - policy[state][action])
-        # decrease probability for the other action
-        policy[state][other_action] -= learning_rate * G * policy[state][other_action]
-        # ensure probabilities remain valid
-        policy[state][action] = max(0, min(1, policy[state][action]))
-        policy[state][other_action] = 1 - policy[state][action]
+    other_action = 1 - action
+    # increase probability for actions that lead to high returns
+    policy[state][action] += learning_rate_actor * td_error * (1 - policy[state][action])
+    # decrease probability for the other action
+    policy[state][other_action] -= learning_rate_actor * td_error * policy[state][other_action]
+    # ensure probabilities remain valid
+    policy[state][action] = max(0, min(1, policy[state][action]))
+    policy[state][other_action] = 1 - policy[state][action]
+
+
+def update_value_function(state, td_error):
+    """
+      Update the value function using td_error
+    """
+    value_function[state] += learning_rate_critic * td_error
 
 
 def run_training():
@@ -81,9 +89,7 @@ def run_training():
         state = discretize_state(env.reset()[0])
         initialize_state(state)
 
-        episode_states = list()
-        episode_actions = list()
-        episode_rewards = list()
+        total_reward = 0
 
         terminated = False
         truncated = False
@@ -93,31 +99,29 @@ def run_training():
             next_state = discretize_state(next_state)
             initialize_state(next_state)
 
-            # store the state, action, and reward
-            episode_states.append(state)
-            episode_actions.append(action)
-            episode_rewards.append(reward)
-
+            # calculate TD error
+            td_target = reward + gamma * value_function[next_state] if not terminated and not truncated else reward
+            td_error = td_target - value_function[state]
+        
+            # update the actor and critic
+            update_policy(state, action, td_error)
+            update_value_function(state, td_error)
+        
+            # move to the next state
             state = next_state
-
-        # compute returns for the episode
-        episode_returns = compute_returns(episode_rewards, gamma)
-
-        # update policy based on the episode
-        update_policy(episode_states, episode_actions, episode_returns)
+            total_reward += reward
 
         # logging for tracking progress
         if episode % 100 == 0:
-            total_reward = sum(episode_rewards)
             print(f"Episode {episode}, Total Reward: {total_reward}")
 
-    with open('policy_grad_wk.pickle', 'wb') as handle:
+    with open('actor_critic_wk.pickle', 'wb') as handle:
         pickle.dump(policy, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def run_model():
     global policy
-    with open('policy_grad_wk_bk.pickle', 'rb') as handle:
+    with open('actor_critic_wk.pickle', 'rb') as handle:
         policy = pickle.load(handle)
 
     env = gym.make("CartPole-v1", render_mode='human')
@@ -146,8 +150,9 @@ def run_model():
 
     env.close()
 
-run_training()
-run_model()
+if __name__ == '__main__':
+    run_training()
+    run_model()
 
 # available states
 # cart position (how far it is left or right from the center)

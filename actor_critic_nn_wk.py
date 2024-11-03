@@ -5,7 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 # Set up the environment
-env = gymnasium.make('CartPole-v1', render_mode='human')
+env = gymnasium.make('CartPole-v1')
 
 # Actor-Critic Network
 class ActorCritic(nn.Module):
@@ -46,18 +46,18 @@ def compute_advantage(rewards, values, gamma):
 
 
 def run_training():
-    # Hyperparameters
+    # hyperparameters
     training_counter = 0
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-    learning_rate = 0.001
+    learning_rate = 0.01
     gamma = 0.99
 
-    # Initialize model, optimizer, and loss function
+    # initialize model, optimizer, and loss function
     model = ActorCritic(state_dim, action_dim)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
-    # Training Loop
+    # training loop
     for episode in range(1000):
         state = env.reset()
         terminated = False
@@ -72,12 +72,12 @@ def run_training():
             state = torch.FloatTensor(state)
             action_probs, value = model(state)
             
-            # Sample action from the probability distribution
+            # sample action from the probability distribution
             action_dist = torch.distributions.Categorical(action_probs)
             action = action_dist.sample()
             log_prob = action_dist.log_prob(action)
             
-            # Step environment
+            # step environment
             next_state, reward, terminated, truncated, _ = env.step(action.item())
             rewards.append(reward)
             log_probs.append(log_prob)
@@ -86,11 +86,11 @@ def run_training():
             
             state = next_state
         
-        # Compute advantages
+        # compute advantages
         values = [v.item() for v in values]
         advantages = compute_advantage(rewards, values, gamma)
 
-        # Compute loss and update model
+        # compute loss and update model
         actor_loss = -(torch.stack(log_probs) * advantages).mean()
         critic_loss = advantages.pow(2).mean()
         loss = actor_loss + critic_loss
@@ -102,24 +102,25 @@ def run_training():
         if episode % 50 == 0:
             print(f"Episode {episode}, Total Reward: {episode_reward}")
 
-        # Early stopping if solved
+        # early stopping if solved
         if episode_reward >= 250 and training_counter < 10:
             training_counter = training_counter + 1
             print(f"trained: {training_counter}")
         elif episode_reward >= 250 and training_counter >= 10:
-            print(f"Solved in {episode} episodes!")
+            print(f"solved in {episode} episodes!")
             break
 
-    torch.save(model.state_dict(), 'a2cm.pt')
+    torch.save(model.state_dict(), 'actor_critic_nn_wk.pth')
 
 
 def run_with_trained_model():
+    env = gymnasium.make("CartPole-v1", render_mode='human')
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
 
     test_model = ActorCritic(state_dim, action_dim)
 
-    test_model.load_state_dict(torch.load('a2cm.pt', weights_only=False))
+    test_model.load_state_dict(torch.load('actor_critic_nn_wk.pth', weights_only=False))
     test_model.eval()  # Set the model to evaluation mode
 
     # Run test episodes
@@ -153,9 +154,15 @@ def run_with_trained_model():
 
 
 if __name__ == '__main__':
-    # run_training()
-    # run_with_trained_model()
-    state_dim = env.observation_space
-    action_dim = env.action_space
-    print(state_dim)
-    print(action_dim)
+    run_training()
+    run_with_trained_model()
+
+# available states
+# cart position (how far it is left or right from the center)
+# cart velocity (speed and direction of the cart)
+# pole angle (the angle of the pole relative to base)
+# pole angular velocity (how quickly is falling or returning upright)
+
+# available actions
+# left move 0 (move the agent to the left)
+# right move 1 (move the agent to the right)
