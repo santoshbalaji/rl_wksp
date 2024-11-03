@@ -1,14 +1,13 @@
-import gymnasium
-import numpy as np
+import gymnasium as gym
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
-# Set up the environment
-env = gymnasium.make('CartPole-v1')
+# setting up cartpole environment
+env = gym.make('CartPole-v1')
 
-# Actor-Critic Network
 class ActorCritic(nn.Module):
+
     def __init__(self, state_dim, action_dim):
 
         super(ActorCritic, self).__init__()
@@ -18,13 +17,13 @@ class ActorCritic(nn.Module):
             nn.ReLU()
         )
 
-        # Actor network
+        # actor network
         self.actor = nn.Sequential(
             nn.Linear(128, action_dim),
             nn.Softmax(dim=-1)  # for discrete actions
         )
 
-        # Critic network
+        # critic network
         self.critic = nn.Linear(128, 1)
 
 
@@ -47,7 +46,7 @@ def compute_advantage(rewards, values, gamma):
 
 def run_training():
     # hyperparameters
-    training_counter = 0
+    # training_counter = 0
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
     learning_rate = 0.01
@@ -58,7 +57,7 @@ def run_training():
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
 
     # training loop
-    for episode in range(1000):
+    for episode in range(2000):
         state = env.reset()
         terminated = False
         truncated = False
@@ -103,28 +102,28 @@ def run_training():
             print(f"Episode {episode}, Total Reward: {episode_reward}")
 
         # early stopping if solved
-        if episode_reward >= 250 and training_counter < 10:
-            training_counter = training_counter + 1
-            print(f"trained: {training_counter}")
-        elif episode_reward >= 250 and training_counter >= 10:
-            print(f"solved in {episode} episodes!")
-            break
+        # if episode_reward >= 200 and training_counter < 10:
+        #     training_counter = training_counter + 1
+        #     print(f"trained: {training_counter}")
+        # elif episode_reward >= 200 and training_counter >= 10:
+        #     print(f"solved in {episode} episodes!")
+        #     break
 
     torch.save(model.state_dict(), 'actor_critic_nn_wk.pth')
 
 
 def run_with_trained_model():
-    env = gymnasium.make("CartPole-v1", render_mode='human')
+    env = gym.make("CartPole-v1", render_mode='human')
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
 
     test_model = ActorCritic(state_dim, action_dim)
 
-    test_model.load_state_dict(torch.load('actor_critic_nn_wk.pth', weights_only=False))
-    test_model.eval()  # Set the model to evaluation mode
+    test_model.load_state_dict(torch.load('actor_critic_nn_wk_bk.pth', weights_only=False))
+    test_model.eval()  # set the model to evaluation mode
 
-    # Run test episodes
-    for episode in range(5):  # Run 5 test episodes
+    # run test episodes
+    for episode in range(5):  # run 5 test episodes
         state = env.reset()
         terminated = False
         truncated = False
@@ -132,20 +131,20 @@ def run_with_trained_model():
 
         state = state[0]
         while not terminated and not truncated:
-            state = torch.FloatTensor(state)  # Convert state to tensor
+            state = torch.FloatTensor(state)  # convert state to tensor
             action_probs, _ = test_model(state)
 
-            # Choose action with the highest probability
+            # choose action with the highest probability
             action = torch.argmax(action_probs).item()
 
-            # Take the action in the environment
+            # take the action in the environment
             next_state, reward, terminated, truncated, _ = env.step(action)
             total_reward += reward
 
-            # Update state
+            # update state
             state = next_state
 
-            # Render the environment
+            # render the environment
             env.render()
 
         print(f"Episode {episode + 1}, Total Reward: {total_reward}")
@@ -154,7 +153,7 @@ def run_with_trained_model():
 
 
 if __name__ == '__main__':
-    run_training()
+    # run_training()
     run_with_trained_model()
 
 # available states

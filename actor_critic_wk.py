@@ -9,7 +9,7 @@ env = gym.make("CartPole-v1")
 learning_rate_actor = 0.01 # learning rate for the actor
 learning_rate_critic = 0.1 # learning rate for the critic
 gamma = 0.99          # discount factor
-num_episodes = 3000   # total number of episodes
+num_episodes = 1000   # total number of episodes
 
 # discretize the state space into bins for each feature
 n_bins = [10, 10, 10, 10]  # number of bins for each state variable
@@ -41,6 +41,7 @@ def initialize_state(state):
         # initialize with equal probability for both actions (0: left, 1: right)
         policy[state] = {0: 0.5, 1: 0.5}
         value_function[state] = 0.0   
+
 
 def select_action(state):
     """
@@ -121,7 +122,7 @@ def run_training():
 
 def run_model():
     global policy
-    with open('actor_critic_wk.pickle', 'rb') as handle:
+    with open('actor_critic_wk_bk.pickle', 'rb') as handle:
         policy = pickle.load(handle)
 
     env = gym.make("CartPole-v1", render_mode='human')
@@ -150,8 +151,9 @@ def run_model():
 
     env.close()
 
+
 if __name__ == '__main__':
-    run_training()
+    # run_training()
     run_model()
 
 # available states

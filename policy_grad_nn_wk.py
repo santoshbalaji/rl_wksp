@@ -129,9 +129,10 @@ def run_model():
     env.close()
 
 
-# check_cuda()
-# run_training()
-run_model()
+if __name__ == '__main__':
+    # check_cuda()
+    # run_training()
+    run_model()
 
 # available states
 # cart position (how far it is left or right from the center)

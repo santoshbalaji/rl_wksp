@@ -146,8 +146,9 @@ def run_model():
 
     env.close()
 
-run_training()
-run_model()
+if __name__ == '__main__':
+    # run_training()
+    run_model()
 
 # available states
 # cart position (how far it is left or right from the center)
