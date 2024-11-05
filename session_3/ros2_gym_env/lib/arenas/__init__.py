@@ -1,0 +1,1 @@
+from lib.arenas.standard import StandardArena
