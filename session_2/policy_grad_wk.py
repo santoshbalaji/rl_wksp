@@ -3,7 +3,7 @@ import numpy as np
 import pickle
 
 # setting up cartpole environment
-env = gym.make("CartPole-v1")
+env = gym.make("LunarLander", render_mode='human')
 
 # hyperparameters
 learning_rate = 0.01 # learning rate for policy updates
@@ -147,7 +147,7 @@ def run_model():
     env.close()
 
 if __name__ == '__main__':
-    # run_training()
+    run_training()
     run_model()
 
 # available states
