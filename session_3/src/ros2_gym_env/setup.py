@@ -40,6 +40,14 @@ setup(
             'lib/assets/robots/ur5e/ur5e.png'
         ]),
         (os.path.join('share', package_name, 'lib/assets/robots/ur5e/assets'), glob('lib/assets/robots/ur5e/assets/*.obj')),
+        # Include Aubo_I5 assets
+        (os.path.join('share', package_name, 'lib/assets/robots/aubo_i5'), [
+            'lib/assets/robots/aubo_i5/aubo_i5.xml',
+            'lib/assets/robots/aubo_i5/scene.xml',
+        ]),
+        (os.path.join('share', package_name, 'lib/assets/robots/aubo_i5/meshes/visual'), glob('lib/assets/robots/aubo_i5/meshes/visual/*.obj')),
+        (os.path.join('share', package_name, 'lib/assets/robots/aubo_i5/meshes/collision'), glob('lib/assets/robots/aubo_i5/meshes/collision/*.stl')),
+
     ],
     include_package_data=True,
 )

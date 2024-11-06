@@ -15,7 +15,8 @@ from lib.robots import Arm, AG95
 from lib.mocaps import Target
 from lib.controllers import OperationalSpaceController, JointEffortController
 from lib.utils.transform_utils import mat2quat
-
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from sensor_msgs.msg import JointState
 
 class RlManipEnv(Env):
     metadata = {
@@ -33,7 +34,8 @@ class RlManipEnv(Env):
         initial_pose = [0, -1.5707, 1.5707, -1.5707, -1.5707, 0.0],
         target_pose = [-0.7, 0.0, 0.02, 0.0, 0.0, 0.0, 1.0],
         max_steps = 500,
-        action_mode = "joint"
+        action_mode = "joint",
+        reward_mode = None
     ):
         # Initialize ROS 2 Node
         rclpy.init(args=None)
@@ -48,10 +50,17 @@ class RlManipEnv(Env):
         self._initial_pose = initial_pose
         self._target_pose = target_pose
         self._action_mode = action_mode
+        self.reward_mode = reward_mode
 
-        # ROS 2 publishers and subscribers
-        self.ee_pos_publisher = self.node.create_publisher(Float64MultiArray, 'ee_position', 10)
-        self.observation_publisher = self.node.create_publisher(Float64MultiArray, 'observation', 10)
+        print(self.reward_mode)
+
+        # Publisher to send joint trajectory commands
+        self.joint_command_publisher = self.node.create_publisher(
+            Float64MultiArray, '/joint_commands', 10)
+        
+        # Subscriber to receive joint state
+        self.joint_state_subscriber = self.node.create_subscription(
+            JointState, '/joint_states', self.joint_state_callback, 10)
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(18,), dtype=np.float64
@@ -76,11 +85,10 @@ class RlManipEnv(Env):
             eef_site_name='eef_site',
             attachment_site_name='attachment_site'
         )
+        
         self._gripper_offset = [0.0, 0.0, 0.0]
         # Load Robot Arm and attach it to the arena
-        # self._gripper = AG95()
         if self._gripper_model:
-            # self._gripper = AG95()
             self._gripper = globals()[gripper_model]() if gripper_model in globals() else None
             self._arm.attach_tool(self._gripper.mjcf_model, pos=[0, 0, 0], quat=[0, 0, 0, 1])
             self._gripper_offset = [0.0, 0.0, 0.18]
@@ -114,6 +122,10 @@ class RlManipEnv(Env):
         self._step_start = None
         self._counter = 0
         self._max_steps = max_steps
+
+        self.prev_joint_positions = None
+        self.prev_joint_velocities = None
+        self.prev_joint_accelerations = None  # For jerk calculation
         
         self.executor = rclpy.executors.SingleThreadedExecutor()
         self.executor.add_node(self.node)
@@ -124,8 +136,8 @@ class RlManipEnv(Env):
         rclpy.spin(self.node)
 
     def _get_obs(self) -> np.ndarray:
-        joint_positions = self._physics.bind(self._arm.joints).qpos
-        joint_velocities = self._physics.bind(self._arm.joints).qvel
+        joint_positions = self._physics.bind(self._arm.joints).qpos.copy()
+        joint_velocities = self._physics.bind(self._arm.joints).qvel.copy()
         ee_pos = self._physics.bind(self._arm.eef_site).xpos
         ee_xmat = self._physics.bind(self._arm.eef_site).xmat
         ee_xquat = mat2quat(ee_xmat.reshape(3, 3))  # [x, y, z, w]
@@ -153,6 +165,13 @@ class RlManipEnv(Env):
                 self._target.set_box_pose(self._physics, position=self._target_pose[:3], quaternion=self._target_pose[3:])
                 self._init_box_pose = self._target.get_box_pose(self._physics)
         
+        # Initialize previous positions, velocities, and accelerations
+        joint_positions = self._physics.bind(self._arm.joints).qpos.copy()
+        joint_velocities = self._physics.bind(self._arm.joints).qvel.copy()
+        self.prev_joint_positions = joint_positions
+        self.prev_joint_velocities = joint_velocities
+        self.prev_joint_accelerations = np.zeros_like(joint_velocities)
+
         observation = self._get_obs()
         return observation, {}
 
@@ -165,10 +184,9 @@ class RlManipEnv(Env):
             action = self.received_action
             self.received_action = None
 
-        if self._env_mode == "test":
+        if self._env_mode == "Test":
             time.sleep(0.1)
 
-        # Increment step counter
         self._counter += 1
 
         # Set gripper action if necessary
@@ -181,28 +199,51 @@ class RlManipEnv(Env):
             self._apply_joint_action(action)
         else:
             raise ValueError(f"Unknown action mode: {self._action_mode}")
+        
+        if self._task in {"reach_box_static", "reach_box_dynamic"}:
+            box_pose = self._target.get_box_pose(self._physics)
+            box_displacement = np.linalg.norm(box_pose - self._init_box_pose)
+        else:
+            box_displacement = 0.0
 
         # Step the simulation
         self._physics.step()
 
-        # Get observations and compute reward
+        # Get observations
         observation = self._get_obs()
+        joint_positions = observation[0:6]
+        joint_velocities = observation[6:12]
+
+        # Compute accelerations and jerks
+        dt = self._timestep
+        joint_accelerations = (joint_velocities - self.prev_joint_velocities) / dt
+        joint_jerks = (joint_accelerations - self.prev_joint_accelerations) / dt
+
+        # Compute jerk magnitude
+        jerk_magnitude = np.linalg.norm(joint_jerks)
+
+        # Update previous states
+        self.prev_joint_positions = joint_positions.copy()
+        self.prev_joint_velocities = joint_velocities.copy()
+        self.prev_joint_accelerations = joint_accelerations.copy()
+
+        # Get position and orientation errors
         position_error = observation[12:15]
         orientation_error = observation[15:18]
         position_distance = np.linalg.norm(position_error)
         orientation_distance = np.linalg.norm(orientation_error)
-        reward, terminated = self._compute_reward_and_done(position_distance, orientation_distance)
 
+        # Compute reward and terminated, now including jerk_magnitude
+        reward, terminated = self._compute_reward_and_done(position_distance, orientation_distance, box_displacement, jerk_magnitude)
 
         # Gripper control
         if self._gripper_model:
             gripper_effort = np.array([5000.0]) if self._gripper_action == "close" else np.array([-5000.0])
             self._gripper_controller.run(gripper_effort)
 
-
         # Check for maximum steps
         if self._counter >= self._max_steps:
-            print("Max step reached, resetting environment.")
+            print("STATUS: Max step reached, resetting environment.")
             terminated = True
 
         # Render if needed
@@ -243,6 +284,16 @@ class RlManipEnv(Env):
         new_joint_positions = np.clip(new_joint_positions, -np.pi, np.pi)
         self._physics.bind(self._arm.joints).qpos = new_joint_positions
 
+        # Joint command message to publish
+        joint_command_msg = Float64MultiArray()
+        joint_command_msg.data = action.tolist()        
+
+        # Publish the command
+        self.joint_command_publisher.publish(joint_command_msg)
+
+    def joint_state_callback(self, msg):
+        self.prev_joint_states = msg
+
     def render(self):
         if self._render_mode == "rgb_array":
             return self._physics.render()
@@ -264,16 +315,48 @@ class RlManipEnv(Env):
             time.sleep(time_until_next_step)
         self._step_start = time.time()
 
-    def _compute_reward_and_done(self, position_distance, orientation_distance):
+    def _compute_reward_and_done(self, position_distance, orientation_distance, box_displacement=0.0, jerk_magnitude=0.0):
         position_threshold = 0.02
         orientation_threshold = 0.1
-        total_distance = position_distance #+ orientation_distance
-        reward = -total_distance 
-        terminated = (position_distance < position_threshold) #and (orientation_distance < orientation_threshold)
-        if terminated:
-            print("TARGET REACHED..")
-        return reward, terminated
+        box_displacement_threshold = 0.01
 
+        jerk_threshold = 50.0  # Define an appropriate threshold
+        jerk_penalty_weight = 0.1  # Penalty weight
+
+        if self.reward_mode == 1:
+            reward = -position_distance
+            terminated = position_distance < position_threshold
+            if terminated:
+                print("STATUS: Target Reached (Position Only)")
+
+        elif self.reward_mode == 2:
+            total_distance = position_distance + orientation_distance
+            reward = -total_distance
+            terminated = (position_distance < position_threshold) and (orientation_distance < orientation_threshold)
+            if terminated:
+                print("STATUS: Target Reached (Position and Orientation)")
+
+        elif self.reward_mode == 3:
+            total_distance = position_distance + orientation_distance
+            reward = -total_distance
+            terminated = (position_distance < position_threshold) and (orientation_distance < orientation_threshold)
+            if terminated:
+                print("STATUS: Target Reached (Position and Orientation)")
+
+            # Apply jerk penalty
+            if jerk_magnitude > jerk_threshold:
+                jerk_penalty = jerk_penalty_weight * (jerk_magnitude - jerk_threshold)
+                reward -= jerk_penalty
+                
+        else:
+            raise ValueError("Invalid mode selected. Please choose 1, 2, or 3.")
+        
+        if box_displacement > box_displacement_threshold:
+            terminated = True
+            reward -= 10.0
+
+        return reward, terminated
+    
     def close(self):
         if self._viewer is not None:
             self._viewer.close()
