@@ -11,4 +11,4 @@ This section provides links for running collab links in q-learning
  
 ## Google collab link for q-learning
 
-[ttps://colab.research.google.com/drive/1FB9DYJ1To_Zvce-0bz1wS0xBOQ47pYZC?usp=drive_link]
+[https://colab.research.google.com/drive/1FB9DYJ1To_Zvce-0bz1wS0xBOQ47pYZC?usp=drive_link]
