@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 import os
 from glob import glob
 
@@ -7,18 +7,7 @@ package_name = 'ros2_gym_env'
 setup(
     name=package_name,
     version='0.1.0',
-    packages=[package_name, 
-              'lib', 
-              'lib.helpers',
-              'lib.another',
-              'lib.arenas',
-              'lib.controllers',
-              'lib.helpers',
-              'lib.mocaps',
-              'lib.props',
-              'lib.robots',
-              'lib.utils'
-              ],
+    packages=[package_name, 'lib', 'lib.helpers', 'lib.another', 'lib.arenas', 'lib.controllers', 'lib.helpers', 'lib.mocaps', 'lib.props', 'lib.robots', 'lib.utils'],
     install_requires=['setuptools', 'gymnasium', 'numpy', 'rclpy'],
     zip_safe=True,
     maintainer='Shalman Khan',
@@ -36,18 +25,21 @@ setup(
         ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
         # Package XML
         ('share/' + package_name, ['package.xml']),
-        # Include ag95 assets
-        (os.path.join('share', package_name, 'assets/robots/ag95'), [
+        
+        # Install AG95 assets including meshes in the share directory
+        (os.path.join('share', package_name, 'lib/assets/robots/ag95'), [
             'lib/assets/robots/ag95/ag95.xml',
             'lib/assets/robots/ag95/scene.xml'
         ]),
-        (os.path.join('share', package_name, 'assets/robots/ag95/meshes'), glob('lib/assets/robots/ag95/meshes/*.obj')),
-        # Include ur5e assets
-        (os.path.join('share', package_name, 'assets/robots/ur5e'), [
+        (os.path.join('share', package_name, 'lib/assets/robots/ag95/meshes'), glob('lib/assets/robots/ag95/meshes/*.stl')),
+
+        # Include UR5e assets
+        (os.path.join('share', package_name, 'lib/assets/robots/ur5e'), [
             'lib/assets/robots/ur5e/ur5e.xml',
             'lib/assets/robots/ur5e/scene.xml',
             'lib/assets/robots/ur5e/ur5e.png'
         ]),
-        (os.path.join('share', package_name, 'assets/robots/ur5e/assets'), glob('lib/assets/robots/ur5e/assets/*.obj')),
+        (os.path.join('share', package_name, 'lib/assets/robots/ur5e/assets'), glob('lib/assets/robots/ur5e/assets/*.obj')),
     ],
+    include_package_data=True,
 )

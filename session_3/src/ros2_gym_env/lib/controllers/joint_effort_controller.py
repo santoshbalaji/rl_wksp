@@ -27,7 +27,7 @@ class JointEffortController:
 
         # Clip the target efforts to ensure they are within the allowable effort range
         target_effort = np.clip(target, self._min_effort, self._max_effort)
-
+        
         # Set the control signals for the actuators to the desired target joint positions or states
         self._physics.bind(self._joints).qfrc_applied = target_effort
 

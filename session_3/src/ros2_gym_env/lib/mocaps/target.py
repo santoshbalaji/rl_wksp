@@ -5,7 +5,7 @@ class Target(object):
     A class representing a target with motion capture capabilities.
     """
 
-    def __init__(self, mjcf_root, arena, gripper_offset):
+    def __init__(self, mjcf_root, arena, gripper_offset, task):
         """
         Initializes a new instance of the Target class.
 
@@ -28,13 +28,13 @@ class Target(object):
             conaffinity=0,
             contype=0,
         )
-
-        # Attach a free-moving box to the arena
-        self._box_size = [0.02, 0.02, 0.02]
-        self._box_rgba = [0, 1, 0, 1.0]
-        self._box = self._arena._mjcf_model.worldbody.add("body", name="box", pos=[0, 0, 0])
-        self._box.add("geom", type="box", size=self._box_size, rgba=self._box_rgba)
-        self._box.add("freejoint", name='box_freejoint')
+        if task in {"reach_box_static", "reach_box_dynamic"}:
+            # Attach a free-moving box to the arena
+            self._box_size = [0.02, 0.02, 0.02]
+            self._box_rgba = [0, 1, 0, 1.0]
+            self._box = self._arena._mjcf_model.worldbody.add("body", name="box", pos=[0, 0, 0])
+            self._box.add("geom", type="box", size=self._box_size, rgba=self._box_rgba)
+            self._box.add("freejoint", name='box_freejoint')
 
         self._gripper_offset = gripper_offset
 
