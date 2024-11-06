@@ -1,17 +1,18 @@
 import gymnasium as gym
 import numpy as np
 import pickle
+import gzip
 
 # setting up cartpole environment
-env = gym.make("LunarLander", render_mode='human')
+env = gym.make("CartPole-v1")
 
 # hyperparameters
-learning_rate = 0.01 # learning rate for policy updates
-gamma = 0.99          # discount factor
-num_episodes = 2000   # total number of episodes
+learning_rate = 0.001 # learning rate for policy updates
+gamma = 0.995         # discount factor
+num_episodes = 20000   # total number of episodes
 
 # discretize the state space into bins for each feature
-n_bins = [10, 10, 10, 10]  # number of bins for each state variable
+n_bins = [50, 50, 50, 50]  # number of bins for each state variable
 state_bins = [
     np.linspace(-4.8, 4.8, n_bins[0] - 1),     # cart position
     np.linspace(-4, 4, n_bins[1] - 1),         # cart velocity
@@ -31,13 +32,17 @@ def discretize_state(state):
     return state_discrete
 
 
-def initialize_state(state):
+def initialize_state():
     """
       Initialize policy entries for a new discrete state.
     """
-    if state not in policy:
-        # initialize with equal probability for both actions (0: left, 1: right)
-        policy[state] = {0: 0.5, 1: 0.5}
+    for i in range(0, 50):
+        for j in range(0, 50):
+            for k in range(0, 50):
+                for l in range(0, 50):
+                    # initialize with equal probability for both actions (0: left, 1: right)
+                    state = (i, j, k, l)
+                    policy[state] = {0: 0.5, 1: 0.5}
 
 
 def select_action(state):
@@ -77,9 +82,10 @@ def update_policy(episode_states, episode_actions, episode_returns):
 
 
 def run_training():
+    initialize_state()
+
     for episode in range(num_episodes):
         state = discretize_state(env.reset()[0])
-        initialize_state(state)
 
         episode_states = list()
         episode_actions = list()
@@ -91,7 +97,6 @@ def run_training():
             action = select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
             next_state = discretize_state(next_state)
-            initialize_state(next_state)
 
             # store the state, action, and reward
             episode_states.append(state)
@@ -111,13 +116,13 @@ def run_training():
             total_reward = sum(episode_rewards)
             print(f"Episode {episode}, Total Reward: {total_reward}")
 
-    with open('policy_grad_wk.pickle', 'wb') as handle:
+    with gzip.open('policy_grad_wk.pickle.gz', 'wb') as handle:
         pickle.dump(policy, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def run_model():
     global policy
-    with open('policy_grad_wk_bk.pickle', 'rb') as handle:
+    with gzip.open('policy_grad_wk.pickle.gz', 'rb') as handle:
         policy = pickle.load(handle)
 
     env = gym.make("CartPole-v1", render_mode='human')

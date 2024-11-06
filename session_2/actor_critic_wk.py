@@ -1,6 +1,7 @@
 import gymnasium as gym
 import numpy as np
 import pickle
+import gzip
 
 # setting up cartpole environment
 env = gym.make("CartPole-v1")
@@ -8,11 +9,11 @@ env = gym.make("CartPole-v1")
 # hyperparameters
 learning_rate_actor = 0.01 # learning rate for the actor
 learning_rate_critic = 0.1 # learning rate for the critic
-gamma = 0.99          # discount factor
-num_episodes = 1000   # total number of episodes
+gamma = 0.995          # discount factor
+num_episodes = 30000   # total number of episodes
 
 # discretize the state space into bins for each feature
-n_bins = [10, 10, 10, 10]  # number of bins for each state variable
+n_bins = [50, 50, 50, 50]  # number of bins for each state variable
 state_bins = [
     np.linspace(-4.8, 4.8, n_bins[0] - 1),     # cart position
     np.linspace(-4, 4, n_bins[1] - 1),         # cart velocity
@@ -33,14 +34,18 @@ def discretize_state(state):
     return state_discrete
 
 
-def initialize_state(state):
+def initialize_state():
     """
       Initialize policy entries for a new discrete state.
     """
-    if state not in policy:
-        # initialize with equal probability for both actions (0: left, 1: right)
-        policy[state] = {0: 0.5, 1: 0.5}
-        value_function[state] = 0.0   
+    for i in range(0, 50):
+        for j in range(0, 50):
+            for k in range(0, 50):
+                for l in range(0, 50):
+                    # initialize with equal probability for both actions (0: left, 1: right)
+                    state = (i, j, k, l)
+                    policy[state] = {0: 0.5, 1: 0.5}
+                    value_function[state] = 0.0
 
 
 def select_action(state):
@@ -86,9 +91,9 @@ def update_value_function(state, td_error):
 
 
 def run_training():
+    initialize_state()
     for episode in range(num_episodes):
         state = discretize_state(env.reset()[0])
-        initialize_state(state)
 
         total_reward = 0
 
@@ -98,7 +103,6 @@ def run_training():
             action = select_action(state)
             next_state, reward, terminated, truncated, _ = env.step(action)
             next_state = discretize_state(next_state)
-            initialize_state(next_state)
 
             # calculate TD error
             td_target = reward + gamma * value_function[next_state] if not terminated and not truncated else reward
@@ -116,13 +120,13 @@ def run_training():
         if episode % 100 == 0:
             print(f"Episode {episode}, Total Reward: {total_reward}")
 
-    with open('actor_critic_wk.pickle', 'wb') as handle:
+    with gzip.open('actor_critic_wk.pickle.gz', 'wb') as handle:
         pickle.dump(policy, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
 def run_model():
     global policy
-    with open('actor_critic_wk_bk.pickle', 'rb') as handle:
+    with gzip.open('actor_critic_wk.pickle.gz', 'rb') as handle:
         policy = pickle.load(handle)
 
     env = gym.make("CartPole-v1", render_mode='human')
@@ -153,7 +157,7 @@ def run_model():
 
 
 if __name__ == '__main__':
-    # run_training()
+    run_training()
     run_model()
 
 # available states
