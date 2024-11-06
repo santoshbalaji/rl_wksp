@@ -42,7 +42,7 @@ def train_model(render_mode):
         task="reach",                   # Options: "reach", "reach_box_static", "reach_box_dynamic"
         max_steps=500,
         target_pose=[-0.7, 0.0, 0.18, 0.0, 0.0, 0.0, 1.0],
-        reward_mode=2                   #Options: 1-Position 2-Position+Orientation  3-Position+Orientation+Jerk
+        reward_mode=1                   #Options: 1-Position 2-Position+Orientation  3-Position+Orientation+Jerk
     )
 
     observation, info = env.reset(seed=42)
@@ -53,7 +53,7 @@ def train_model(render_mode):
     model.learn(total_timesteps=total_timesteps)
 
     # Save the trained model
-    model.save("ppo_ur5e_ros2_reach_orientation_training_6_000_000")
+    model.save("ppo_ur5e_ros2_reach_training")
 
     # Close the environment after training
     env.close()
@@ -64,18 +64,18 @@ def test_model(render_mode):
     Tests the trained PPO model on the RlManipEnv environment.
     """
     # Load the previously trained model
-    model = PPO.load("ppo_ur5e_ros2_reach_orientation_training_6_000_000")
+    model = PPO.load("ppo_ur5e_ros2_reach_training")
 
     # Create the environment for testing
     env = RlManipEnv(
         render_mode=render_mode,        # Options: "human" or None
         env_mode="Test",                # Options: "Train" or "Test"
         robot_model="ur5e",             # Options: "ur5e" or "aubo_i5"
-        gripper_model="AG95",           # Options: "AG95" or None
+        gripper_model=None,           # Options: "AG95" or None
         task="reach",                   # Options: "reach", "reach_box_static", "reach_box_dynamic"
         target_pose=[-0.7, 0.0, 0.18, 0.0, 0.0, 0.0, 1.0],
         max_steps=500,
-        reward_mode=2                   #Options: 1-Position 2-Position+Orientation  3-Position+Orientation+Jerk
+        reward_mode=1                   #Options: 1-Position 2-Position+Orientation  3-Position+Orientation+Jerk
     )
 
     observation, info = env.reset(seed=42)
