@@ -30,7 +30,7 @@ if args.mode == "Train":
     model.learn(total_timesteps=total_timesteps)
 
     # Save the trained model to the current working directory 
-    model.save("ppo_ur5e_ros2_3")
+    model.save("ppo_ur5e_ros2_reach_1")
 
     # Close the environment after training
     env.close()
@@ -41,14 +41,14 @@ if args.mode == "Train":
 
 elif args.mode == "Test":
     # Load the trained model
-    model = PPO.load("ppo_ur5e_ros2_3")
+    model = PPO.load("ppo_ur5e_ros2_reach_1")
 
     # Re-create the environment after loading the model with specified render mode
     env = UR5eGrpEnvROS2(render_mode=args.render_mode)
     observation, info = env.reset(seed=42)
 
     # Run the action loop for testing the model
-    for episode in range(100):  # Run for 100 episodes
+    for episode in range(1000):  # Run for 100 episodes
         action, _states = model.predict(observation, deterministic=True)
         observation, reward, terminated, truncated, info = env.step(action)
         
@@ -57,7 +57,7 @@ elif args.mode == "Test":
             time.sleep(1)
             print("TERMINATED ...." if terminated else "TRUNCATED ....")
             observation, info = env.reset(seed=42)
-            break  # Exit the episode loop on termination/truncation
+            # break  # Exit the episode loop on termination/truncation
 
     # Close the environment after testing
     env.close()
