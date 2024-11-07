@@ -57,18 +57,6 @@ def select_action(state):
     return action
 
 
-def compute_returns(rewards, gamma):
-    """
-      Compute the cumulative discounted returns for each step in an episode.
-    """
-    returns = list()
-    G = 0
-    for reward in reversed(rewards):
-        G = reward + gamma * G
-        returns.insert(0, G)
-    return returns
-
-
 def update_policy(state, action, td_error):
     """
       Update the policy using the actor's policy gradient update
