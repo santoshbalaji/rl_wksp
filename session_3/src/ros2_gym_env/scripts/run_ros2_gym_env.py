@@ -41,6 +41,7 @@ def train_model(render_mode):
         gripper_model=None,             # Options: "AG95" or None
         task="reach",                   # Options: "reach", "reach_box_static", "reach_box_dynamic"
         max_steps=500,
+        # initial_pose=[0, 0, 1.5707, 0, 1.5707, 0], # For Aubo_i5
         target_pose=[-0.7, 0.0, 0.18, 0.0, 0.0, 0.0, 1.0],
         reward_mode=1                   #Options: 1-Position 2-Position+Orientation  3-Position+Orientation+Jerk
     )
@@ -49,11 +50,11 @@ def train_model(render_mode):
 
     # Define and train the model
     model = PPO("MlpPolicy", env, verbose=1)
-    total_timesteps = 6_000_000  # Adjust as needed
+    total_timesteps = 1_00_000  # Adjust as needed
     model.learn(total_timesteps=total_timesteps)
 
     # Save the trained model
-    model.save("ppo_ur5e_ros2_reach_training")
+    model.save("ppo_ur5e_ros2_reach_position_training_nov7_1_00_000")
 
     # Close the environment after training
     env.close()

@@ -19,6 +19,9 @@ from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
 
 class RlManipEnv(Env):
+    """
+    Custom reinforcement learning environment for robotic manipulation tasks using MuJoCo and ROS 2.
+    """
     metadata = {
         "render_modes": ["human", "rgb_array"],
         "render_fps": None,
@@ -26,17 +29,32 @@ class RlManipEnv(Env):
 
     def __init__(
         self,
-        render_mode = None,
-        env_mode = None,
-        robot_model = None,
-        gripper_model = None,
-        task = None,
-        initial_pose = [0, -1.5707, 1.5707, -1.5707, -1.5707, 0.0],
-        target_pose = [-0.7, 0.0, 0.02, 0.0, 0.0, 0.0, 1.0],
-        max_steps = 500,
-        action_mode = "joint",
-        reward_mode = None
+        render_mode=None,
+        env_mode=None,
+        robot_model=None,
+        gripper_model=None,
+        task=None,
+        initial_pose=[0, -1.5707, 1.5707, -1.5707, -1.5707, 0.0],
+        target_pose=[-0.7, 0.0, 0.02, 0.0, 0.0, 0.0, 1.0],
+        max_steps=500,
+        action_mode="joint",
+        reward_mode=None
     ):
+        """
+        Initialize the RL Manipulation environment.
+
+        Args:
+            render_mode (str): Mode for rendering ('human' or 'rgb_array').
+            env_mode (str): Environment mode (e.g., 'Train' or 'Test').
+            robot_model (str): Name of the robot model to use.
+            gripper_model (str): Name of the gripper model to use.
+            task (str): Name of the task (e.g., 'reach_box_static').
+            initial_pose (list): Initial joint positions of the robot arm.
+            target_pose (list): Target pose for the end-effector [x, y, z, qx, qy, qz, qw].
+            max_steps (int): Maximum number of steps per episode.
+            action_mode (str): Mode of actions ('joint' or 'cartesian').
+            reward_mode (int): Mode for computing the reward.
+        """
         # Initialize ROS 2 Node
         rclpy.init(args=None)
         super(RlManipEnv, self).__init__()
@@ -52,8 +70,6 @@ class RlManipEnv(Env):
         self._action_mode = action_mode
         self.reward_mode = reward_mode
 
-        print(self.reward_mode)
-
         # Publisher to send joint trajectory commands
         self.joint_command_publisher = self.node.create_publisher(
             Float64MultiArray, '/joint_commands', 10)
@@ -62,6 +78,7 @@ class RlManipEnv(Env):
         self.joint_state_subscriber = self.node.create_subscription(
             JointState, '/joint_states', self.joint_state_callback, 10)
 
+        # Define observation and action spaces
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf, shape=(18,), dtype=np.float64
         )
@@ -73,13 +90,14 @@ class RlManipEnv(Env):
         self._render_mode = render_mode
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         
-        # Create MJCF model components
+        # Create the environment arena and target object
         self._arena = StandardArena()
         self._target = Target(self._arena.mjcf_model, self._arena, [0.0, 0.0, 0.0], self._task)
 
+        # Get package directory for loading robot models
         package_share_dir = get_package_share_directory('ros2_gym_env')
 
-        # Load Robot Arm and attach it to the arena
+        # Load the robot arm model and attach it to the arena
         self._arm = Arm(
             os.path.join(package_share_dir, f'lib/assets/robots/{robot_model}/{robot_model}.xml'),
             eef_site_name='eef_site',
@@ -87,16 +105,17 @@ class RlManipEnv(Env):
         )
         
         self._gripper_offset = [0.0, 0.0, 0.0]
-        # Load Robot Arm and attach it to the arena
+        # Load gripper model and attach it to the arm
         if self._gripper_model:
             self._gripper = globals()[gripper_model]() if gripper_model in globals() else None
             self._arm.attach_tool(self._gripper.mjcf_model, pos=[0, 0, 0], quat=[0, 0, 0, 1])
             self._gripper_offset = [0.0, 0.0, 0.18]
 
+        # Attach the arm to the arena and initialize physics
         self._arena.attach(self._arm.mjcf_model, pos=[0, 0, 0])
         self._physics = mjcf.Physics.from_mjcf_model(self._arena.mjcf_model)
 
-        # Set up controllers
+        # Set up controllers for the arm and gripper
         self._arm_controller = OperationalSpaceController(
             physics=self._physics,
             joints=self._arm.joints,
@@ -117,6 +136,7 @@ class RlManipEnv(Env):
                 max_effort=np.array([5.0]),
             )
 
+        # Initialize simulation parameters and variables for jerk calculation
         self._timestep = self._physics.model.opt.timestep
         self._viewer = None
         self._step_start = None
@@ -126,16 +146,19 @@ class RlManipEnv(Env):
         self.prev_joint_positions = None
         self.prev_joint_velocities = None
         self.prev_joint_accelerations = None  # For jerk calculation
-        
+
+        # Set up ROS 2 executor and spinning thread
         self.executor = rclpy.executors.SingleThreadedExecutor()
         self.executor.add_node(self.node)
         self.spin_thread = threading.Thread(target=self.spin, daemon=True)
         self.spin_thread.start()
 
     def spin(self):
+        """Spin the ROS 2 node in a separate thread."""
         rclpy.spin(self.node)
 
     def _get_obs(self) -> np.ndarray:
+        """Get the current observation from the environment."""
         joint_positions = self._physics.bind(self._arm.joints).qpos.copy()
         joint_velocities = self._physics.bind(self._arm.joints).qvel.copy()
         ee_pos = self._physics.bind(self._arm.eef_site).xpos
@@ -153,8 +176,8 @@ class RlManipEnv(Env):
         
         return np.concatenate([joint_positions, joint_velocities, position_error, orientation_error])
     
-    
     def reset(self, seed=None, options=None):
+        """Reset the environment to an initial state."""
         super().reset(seed=seed)
         self._counter = 0
         with self._physics.reset_context():
@@ -175,21 +198,22 @@ class RlManipEnv(Env):
         observation = self._get_obs()
         return observation, {}
 
-
     def step(self, action=None):
-        # Retrieve action if not provided
+        """Perform one step in the environment using the given action."""
+        # Retrieve action if not provided (e.g., in ROS 2 callback)
         if action is None:
             while self.received_action is None:
                 rclpy.spin_once(self.node)
             action = self.received_action
             self.received_action = None
 
+        # Optional delay in test mode
         if self._env_mode == "Test":
             time.sleep(0.1)
 
         self._counter += 1
 
-        # Set gripper action if necessary
+        # Set gripper action if necessary (placeholder)
         self._gripper_action = "open"  # Modify as needed based on your implementation
 
         # Apply action based on action mode
@@ -200,6 +224,7 @@ class RlManipEnv(Env):
         else:
             raise ValueError(f"Unknown action mode: {self._action_mode}")
         
+        # Check for box displacement in specific tasks
         if self._task in {"reach_box_static", "reach_box_dynamic"}:
             box_pose = self._target.get_box_pose(self._physics)
             box_displacement = np.linalg.norm(box_pose - self._init_box_pose)
@@ -214,7 +239,7 @@ class RlManipEnv(Env):
         joint_positions = observation[0:6]
         joint_velocities = observation[6:12]
 
-        # Compute accelerations and jerks
+        # Compute accelerations and jerks for jerk penalty
         dt = self._timestep
         joint_accelerations = (joint_velocities - self.prev_joint_velocities) / dt
         joint_jerks = (joint_accelerations - self.prev_joint_accelerations) / dt
@@ -233,10 +258,10 @@ class RlManipEnv(Env):
         position_distance = np.linalg.norm(position_error)
         orientation_distance = np.linalg.norm(orientation_error)
 
-        # Compute reward and terminated, now including jerk_magnitude
+        # Compute reward and termination status
         reward, terminated = self._compute_reward_and_done(position_distance, orientation_distance, box_displacement, jerk_magnitude)
 
-        # Gripper control
+        # Gripper control if gripper model is used
         if self._gripper_model:
             gripper_effort = np.array([5000.0]) if self._gripper_action == "close" else np.array([-5000.0])
             self._gripper_controller.run(gripper_effort)
@@ -253,6 +278,7 @@ class RlManipEnv(Env):
         return observation, reward, terminated, False, {}
 
     def _apply_cartesian_action(self, action):
+        """Apply Cartesian action to the robot arm."""
         # Get current end-effector pose
         ee_pos = self._physics.bind(self._arm.eef_site).xpos
         ee_xmat = self._physics.bind(self._arm.eef_site).xmat
@@ -278,6 +304,7 @@ class RlManipEnv(Env):
         self._arm_controller.run(target_pose)
 
     def _apply_joint_action(self, action):
+        """Apply joint action to the robot arm."""
         # Apply action to joint positions
         joint_positions = self._physics.bind(self._arm.joints).qpos
         new_joint_positions = joint_positions + action[:len(joint_positions)]
@@ -292,15 +319,18 @@ class RlManipEnv(Env):
         self.joint_command_publisher.publish(joint_command_msg)
 
     def joint_state_callback(self, msg):
+        """Callback function to handle incoming joint state messages."""
         self.prev_joint_states = msg
 
     def render(self):
+        """Render the environment."""
         if self._render_mode == "rgb_array":
             return self._physics.render()
         elif self._render_mode == "human":
             self._render_frame()
 
     def _render_frame(self):
+        """Render a frame when in human render mode."""
         if self._viewer is None and self._render_mode == "human":
             self._viewer = mujoco.viewer.launch_passive(
                 self._physics.model.ptr,
@@ -316,6 +346,7 @@ class RlManipEnv(Env):
         self._step_start = time.time()
 
     def _compute_reward_and_done(self, position_distance, orientation_distance, box_displacement=0.0, jerk_magnitude=0.0):
+        """Compute the reward and check if the episode is terminated."""
         position_threshold = 0.02
         orientation_threshold = 0.1
         box_displacement_threshold = 0.01
@@ -356,7 +387,7 @@ class RlManipEnv(Env):
             reward -= 10.0
 
         return reward, terminated
-    
+
     def close(self):
         if self._viewer is not None:
             self._viewer.close()
